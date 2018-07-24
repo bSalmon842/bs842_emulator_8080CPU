@@ -32,12 +32,9 @@ internal_func void DebugPrintDisassembledROM(char *printBuffer, u8 opBytes, char
 	}
 }
 
-internal_func u16 PrintDisassembly(char *tempPrint, unsigned char *opCode, u16 (*insArray)[0x100])
+internal_func u16 PrintDisassembly(char *tempPrint, unsigned char *opCode)
 {
-	u8 opBytes = 1;
-	
-	(*insArray)[*opCode] += 1;
-	
+    u8 opBytes = 1;
 	switch(*opCode)
 	{
 		// 0x0 ///////////////////////////////////////////////////////////////////////////
