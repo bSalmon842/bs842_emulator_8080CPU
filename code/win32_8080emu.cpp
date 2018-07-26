@@ -26,6 +26,11 @@ MEMORY LAYOUT:
 
 // TODO LIST
 // TODO(bSalmon): Unit Tests for Instructions
+// TODO(bSalmon): Instructions that use a u16 result variable need to be amended to use their 8 bit parity flags
+// TODO(bSalmon): Look up need for either Carry flag in the 'bitwise' instructions to see if it's necessary
+// TODO(bSalmon): OUT Instruction
+// TODO(bSalmon): IN Instruction
+// TODO(bSalmon): Check new CPI Instruction for fix
 
 #include <Windows.h>
 #include <stdio.h>
@@ -38,15 +43,17 @@ MEMORY LAYOUT:
 inline u8 SetParityFlag(u8 x, u8 size)
 {
 	u8 parityCheckByte = 0;
-	for (int i = 0; i < size; i++)
+	x = (x & ((1<<size) - 1));
+	for (s32 i = 0; i < size; i++)
 	{
-		if ((x & (1 << i)) == (1 << i))
+		if (x & 0x1)
 		{
 			parityCheckByte++;
 		}
+		x = x >> 1;
 	}
 	
-	return (0 == (parityCheckByte & 0x01));
+	return (0 == (parityCheckByte & 0x1));
 }
 
 inline u8 SetAuxiliaryFlag(u8 a, u8 b, b32 isAddition)
@@ -1391,7 +1398,7 @@ internal_func void Emulate(CPUState *cpuState, unsigned char *castedMem)
 			cpuState->regF.z = (result == 0);
 			cpuState->regF.s = (result & (1<<7)) == (1<<7);
 			cpuState->regF.a = SetAuxiliaryFlag(cpuState->regA, (~cpuState->regB + 0x01), true);
-			cpuState->regF.p = SetParityFlag(result, 8);
+			cpuState->regF.p = SetParityFlag((result & 0xff), 8);
 			cpuState->regF.c = (result > 0xff);
 			cpuState->regA = result & 0xff;
 			break;
@@ -1404,7 +1411,7 @@ internal_func void Emulate(CPUState *cpuState, unsigned char *castedMem)
 			cpuState->regF.z = (result == 0);
 			cpuState->regF.s = (result & (1<<7)) == (1<<7);
 			cpuState->regF.a = SetAuxiliaryFlag(cpuState->regA, (~cpuState->regC + 0x01), true);
-			cpuState->regF.p = SetParityFlag(result, 8);
+			cpuState->regF.p = SetParityFlag((result & 0xff), 8);
 			cpuState->regF.c = (result > 0xff);
 			cpuState->regA = result & 0xff;
 			break;
@@ -1417,7 +1424,7 @@ internal_func void Emulate(CPUState *cpuState, unsigned char *castedMem)
 			cpuState->regF.z = (result == 0);
 			cpuState->regF.s = (result & (1<<7)) == (1<<7);
 			cpuState->regF.a = SetAuxiliaryFlag(cpuState->regA, (~cpuState->regD + 0x01), true);
-			cpuState->regF.p = SetParityFlag(result, 8);
+			cpuState->regF.p = SetParityFlag((result & 0xff), 8);
 			cpuState->regF.c = (result > 0xff);
 			cpuState->regA = result & 0xff;
 			break;
@@ -1430,7 +1437,7 @@ internal_func void Emulate(CPUState *cpuState, unsigned char *castedMem)
 			cpuState->regF.z = (result == 0);
 			cpuState->regF.s = (result & (1<<7)) == (1<<7);
 			cpuState->regF.a = SetAuxiliaryFlag(cpuState->regA, (~cpuState->regE + 0x01), true);
-			cpuState->regF.p = SetParityFlag(result, 8);
+			cpuState->regF.p = SetParityFlag((result & 0xff), 8);
 			cpuState->regF.c = (result > 0xff);
 			cpuState->regA = result & 0xff;
 			break;
@@ -1443,7 +1450,7 @@ internal_func void Emulate(CPUState *cpuState, unsigned char *castedMem)
 			cpuState->regF.z = (result == 0);
 			cpuState->regF.s = (result & (1<<7)) == (1<<7);
 			cpuState->regF.a = SetAuxiliaryFlag(cpuState->regA, (~cpuState->regH + 0x01), true);
-			cpuState->regF.p = SetParityFlag(result, 8);
+			cpuState->regF.p = SetParityFlag((result & 0xff), 8);
 			cpuState->regF.c = (result > 0xff);
 			cpuState->regA = result & 0xff;
 			break;
@@ -1456,7 +1463,7 @@ internal_func void Emulate(CPUState *cpuState, unsigned char *castedMem)
 			cpuState->regF.z = (result == 0);
 			cpuState->regF.s = (result & (1<<7)) == (1<<7);
 			cpuState->regF.a = SetAuxiliaryFlag(cpuState->regA, (~cpuState->regL + 0x01), true);
-			cpuState->regF.p = SetParityFlag(result, 8);
+			cpuState->regF.p = SetParityFlag((result & 0xff), 8);
 			cpuState->regF.c = (result > 0xff);
 			cpuState->regA = result & 0xff;
 			break;
@@ -1470,7 +1477,7 @@ internal_func void Emulate(CPUState *cpuState, unsigned char *castedMem)
 			cpuState->regF.z = (result == 0);
 			cpuState->regF.s = (result & (1<<7)) == (1<<7);
 			cpuState->regF.a = SetAuxiliaryFlag(cpuState->regA, (~cpuState->memory[pairHL] + 0x01), true);
-			cpuState->regF.p = SetParityFlag(result, 8);
+			cpuState->regF.p = SetParityFlag((result & 0xff), 8);
 			cpuState->regF.c = (result > 0xff);
 			cpuState->regA = result & 0xff;
 			break;
@@ -1483,7 +1490,7 @@ internal_func void Emulate(CPUState *cpuState, unsigned char *castedMem)
 			cpuState->regF.z = (result == 0);
 			cpuState->regF.s = (result & (1<<7)) == (1<<7);
 			cpuState->regF.a = SetAuxiliaryFlag(cpuState->regA, (~cpuState->regA + 0x01), true);
-			cpuState->regF.p = SetParityFlag(result, 8);
+			cpuState->regF.p = SetParityFlag((result & 0xff), 8);
 			cpuState->regF.c = (result > 0xff);
 			cpuState->regA = result & 0xff;
 			break;
@@ -1496,7 +1503,7 @@ internal_func void Emulate(CPUState *cpuState, unsigned char *castedMem)
 			cpuState->regF.z = (result == 0);
 			cpuState->regF.s = (result & (1<<7)) == (1<<7);
 			cpuState->regF.a = SetAuxiliaryFlag(cpuState->regA, (~(cpuState->regB + cpuState->regF.c) + 0x01), true);
-			cpuState->regF.p = SetParityFlag(result, 8);
+			cpuState->regF.p = SetParityFlag((result & 0xff), 8);
 			cpuState->regF.c = (result > 0xff);
 			cpuState->regA = result & 0xff;
 			break;
@@ -1509,7 +1516,7 @@ internal_func void Emulate(CPUState *cpuState, unsigned char *castedMem)
 			cpuState->regF.z = (result == 0);
 			cpuState->regF.s = (result & (1<<7)) == (1<<7);
 			cpuState->regF.a = SetAuxiliaryFlag(cpuState->regA, (~(cpuState->regC + cpuState->regF.c) + 0x01), true);
-			cpuState->regF.p = SetParityFlag(result, 8);
+			cpuState->regF.p = SetParityFlag((result & 0xff), 8);
 			cpuState->regF.c = (result > 0xff);
 			cpuState->regA = result & 0xff;
 			break;
@@ -1522,7 +1529,7 @@ internal_func void Emulate(CPUState *cpuState, unsigned char *castedMem)
 			cpuState->regF.z = (result == 0);
 			cpuState->regF.s = (result & (1<<7)) == (1<<7);
 			cpuState->regF.a = SetAuxiliaryFlag(cpuState->regA, (~(cpuState->regD + cpuState->regF.c) + 0x01), true);
-			cpuState->regF.p = SetParityFlag(result, 8);
+			cpuState->regF.p = SetParityFlag((result & 0xff), 8);
 			cpuState->regF.c = (result > 0xff);
 			cpuState->regA = result & 0xff;
 			break;
@@ -1535,7 +1542,7 @@ internal_func void Emulate(CPUState *cpuState, unsigned char *castedMem)
 			cpuState->regF.z = (result == 0);
 			cpuState->regF.s = (result & (1<<7)) == (1<<7);
 			cpuState->regF.a = SetAuxiliaryFlag(cpuState->regA, (~(cpuState->regE + cpuState->regF.c) + 0x01), true);
-			cpuState->regF.p = SetParityFlag(result, 8);
+			cpuState->regF.p = SetParityFlag((result & 0xff), 8);
 			cpuState->regF.c = (result > 0xff);
 			cpuState->regA = result & 0xff;
 			break;
@@ -1548,7 +1555,7 @@ internal_func void Emulate(CPUState *cpuState, unsigned char *castedMem)
 			cpuState->regF.z = (result == 0);
 			cpuState->regF.s = (result & (1<<7)) == (1<<7);
 			cpuState->regF.a = SetAuxiliaryFlag(cpuState->regA, (~(cpuState->regH + cpuState->regF.c) + 0x01), true);
-			cpuState->regF.p = SetParityFlag(result, 8);
+			cpuState->regF.p = SetParityFlag((result & 0xff), 8);
 			cpuState->regF.c = (result > 0xff);
 			cpuState->regA = result & 0xff;
 			break;
@@ -1561,7 +1568,7 @@ internal_func void Emulate(CPUState *cpuState, unsigned char *castedMem)
 			cpuState->regF.z = (result == 0);
 			cpuState->regF.s = (result & (1<<7)) == (1<<7);
 			cpuState->regF.a = SetAuxiliaryFlag(cpuState->regA, (~(cpuState->regL + cpuState->regF.c) + 0x01), true);
-			cpuState->regF.p = SetParityFlag(result, 8);
+			cpuState->regF.p = SetParityFlag((result & 0xff), 8);
 			cpuState->regF.c = (result > 0xff);
 			cpuState->regA = result & 0xff;
 			break;
@@ -1575,7 +1582,7 @@ internal_func void Emulate(CPUState *cpuState, unsigned char *castedMem)
 			cpuState->regF.z = (result == 0);
 			cpuState->regF.s = (result & (1<<7)) == (1<<7);
 			cpuState->regF.a = SetAuxiliaryFlag(cpuState->regA, (~(cpuState->memory[pairHL] + cpuState->regF.c) + 0x01), true);
-			cpuState->regF.p = SetParityFlag(result, 8);
+			cpuState->regF.p = SetParityFlag((result & 0xff), 8);
 			cpuState->regF.c = (result > 0xff);
 			cpuState->regA = result & 0xff;
 			break;
@@ -1588,7 +1595,7 @@ internal_func void Emulate(CPUState *cpuState, unsigned char *castedMem)
 			cpuState->regF.z = (result == 0);
 			cpuState->regF.s = (result & (1<<7)) == (1<<7);
 			cpuState->regF.a = SetAuxiliaryFlag(cpuState->regA, (~(cpuState->regB + cpuState->regF.c) + 0x01), true);
-			cpuState->regF.p = SetParityFlag(result, 8);
+			cpuState->regF.p = SetParityFlag((result & 0xff), 8);
 			cpuState->regF.c = (result > 0xff);
 			cpuState->regA = result & 0xff;
 			break;
@@ -1596,7 +1603,6 @@ internal_func void Emulate(CPUState *cpuState, unsigned char *castedMem)
 		
 		// 0xa ///////////////////////////////////////////////////////////////////////////
 		
-		// TODO(bSalmon): Look up need for either Carry flag in the 'bitwise' instructions to see if it's necessary
 		
 		case 0xa0:
 		{
@@ -1874,7 +1880,7 @@ internal_func void Emulate(CPUState *cpuState, unsigned char *castedMem)
 			cpuState->regF.z = (result == 0);
 			cpuState->regF.s = (result & (1<<7)) == (1<<7);
 			cpuState->regF.a = SetAuxiliaryFlag(cpuState->regA, (~cpuState->regB + 0x01), true);
-			cpuState->regF.p = SetParityFlag(result, 8);
+			cpuState->regF.p = SetParityFlag((result & 0xff), 8);
 			cpuState->regF.c = (result > 0xff);
 			break;
 		}
@@ -1886,7 +1892,7 @@ internal_func void Emulate(CPUState *cpuState, unsigned char *castedMem)
 			cpuState->regF.z = (result == 0);
 			cpuState->regF.s = (result & (1<<7)) == (1<<7);
 			cpuState->regF.a = SetAuxiliaryFlag(cpuState->regA, (~cpuState->regC + 0x01), true);
-			cpuState->regF.p = SetParityFlag(result, 8);
+			cpuState->regF.p = SetParityFlag((result & 0xff), 8);
 			cpuState->regF.c = (result > 0xff);
 			break;
 		}
@@ -1898,7 +1904,7 @@ internal_func void Emulate(CPUState *cpuState, unsigned char *castedMem)
 			cpuState->regF.z = (result == 0);
 			cpuState->regF.s = (result & (1<<7)) == (1<<7);
 			cpuState->regF.a = SetAuxiliaryFlag(cpuState->regA, (~cpuState->regD + 0x01), true);
-			cpuState->regF.p = SetParityFlag(result, 8);
+			cpuState->regF.p = SetParityFlag((result & 0xff), 8);
 			cpuState->regF.c = (result > 0xff);
 			break;
 		}
@@ -1910,7 +1916,7 @@ internal_func void Emulate(CPUState *cpuState, unsigned char *castedMem)
 			cpuState->regF.z = (result == 0);
 			cpuState->regF.s = (result & (1<<7)) == (1<<7);
 			cpuState->regF.a = SetAuxiliaryFlag(cpuState->regA, (~cpuState->regE + 0x01), true);
-			cpuState->regF.p = SetParityFlag(result, 8);
+			cpuState->regF.p = SetParityFlag((result & 0xff), 8);
 			cpuState->regF.c = (result > 0xff);
 			break;
 		}
@@ -1922,7 +1928,7 @@ internal_func void Emulate(CPUState *cpuState, unsigned char *castedMem)
 			cpuState->regF.z = (result == 0);
 			cpuState->regF.s = (result & (1<<7)) == (1<<7);
 			cpuState->regF.a = SetAuxiliaryFlag(cpuState->regA, (~cpuState->regH + 0x01), true);
-			cpuState->regF.p = SetParityFlag(result, 8);
+			cpuState->regF.p = SetParityFlag((result & 0xff), 8);
 			cpuState->regF.c = (result > 0xff);
 			break;
 		}
@@ -1934,7 +1940,7 @@ internal_func void Emulate(CPUState *cpuState, unsigned char *castedMem)
 			cpuState->regF.z = (result == 0);
 			cpuState->regF.s = (result & (1<<7)) == (1<<7);
 			cpuState->regF.a = SetAuxiliaryFlag(cpuState->regA, (~cpuState->regL + 0x01), true);
-			cpuState->regF.p = SetParityFlag(result, 8);
+			cpuState->regF.p = SetParityFlag((result & 0xff), 8);
 			cpuState->regF.c = (result > 0xff);
 			break;
 		}
@@ -1947,7 +1953,7 @@ internal_func void Emulate(CPUState *cpuState, unsigned char *castedMem)
 			cpuState->regF.z = (result == 0);
 			cpuState->regF.s = (result & (1<<7)) == (1<<7);
 			cpuState->regF.a = SetAuxiliaryFlag(cpuState->regA, (~cpuState->memory[pairHL] + 0x01), true);
-			cpuState->regF.p = SetParityFlag(result, 8);
+			cpuState->regF.p = SetParityFlag((result & 0xff), 8);
 			cpuState->regF.c = (result > 0xff);
 			break;
 		}
@@ -1959,7 +1965,7 @@ internal_func void Emulate(CPUState *cpuState, unsigned char *castedMem)
 			cpuState->regF.z = (result == 0);
 			cpuState->regF.s = (result & (1<<7)) == (1<<7);
 			cpuState->regF.a = SetAuxiliaryFlag(cpuState->regA, (~cpuState->regA + 0x01), true);
-			cpuState->regF.p = SetParityFlag(result, 8);
+			cpuState->regF.p = SetParityFlag((result & 0xff), 8);
 			cpuState->regF.c = (result > 0xff);
 			break;
 		}
@@ -2143,7 +2149,7 @@ internal_func void Emulate(CPUState *cpuState, unsigned char *castedMem)
 			cpuState->regF.z = (result == 0);
 			cpuState->regF.s = (result & (1<<7)) == (1<<7);
 			cpuState->regF.a = SetAuxiliaryFlag(cpuState->regA, (opCode[1] + cpuState->regF.c), true);
-			cpuState->regF.p = SetParityFlag(result, 8);
+			cpuState->regF.p = SetParityFlag((result & 0xff), 8);
 			cpuState->regF.c = (result < cpuState->regA);
 			cpuState->regA = result;
 			cpuState->programCounter++;
@@ -2238,8 +2244,8 @@ internal_func void Emulate(CPUState *cpuState, unsigned char *castedMem)
 			cpuState->regF.z = (result == 0);
 			cpuState->regF.s = (result & (1<<7)) == (1<<7);
 			cpuState->regF.a = SetAuxiliaryFlag(cpuState->regA, (~opCode[1] + 0x01), true);
-			cpuState->regF.p = SetParityFlag(result, 8);
-			cpuState->regF.c = (result < 0xff);
+			cpuState->regF.p = SetParityFlag((result & 0xff), 8);
+			cpuState->regF.c = (result > 0xff);
 			cpuState->regA = result & 0xff;
 			cpuState->programCounter++;
 			break;
@@ -2327,7 +2333,7 @@ internal_func void Emulate(CPUState *cpuState, unsigned char *castedMem)
 			cpuState->regF.z = (result == 0);
 			cpuState->regF.s = (result & (1<<7)) == (1<<7);
 			cpuState->regF.a = SetAuxiliaryFlag(cpuState->regA, (~(opCode[1] + cpuState->regF.c) + 0x01), true);
-			cpuState->regF.p = SetParityFlag(result, 8);
+			cpuState->regF.p = SetParityFlag((result & 0xff), 8);
 			cpuState->regF.c = (result > 0xff);
 			cpuState->regA = result & 0xff;
 			cpuState->programCounter++;
@@ -2701,11 +2707,11 @@ internal_func void Emulate(CPUState *cpuState, unsigned char *castedMem)
 		case 0xfe:
 		{
 			// CPI a8
-			u16 result = cpuState->regA + (~opCode[1] + 0x01);
+			u16 result = cpuState->regA - opCode[1];
 			cpuState->regF.z = (result == 0);
 			cpuState->regF.s = (result & (1<<7)) == (1<<7);
-			cpuState->regF.a = SetAuxiliaryFlag(cpuState->regA, (~opCode[1] + 0x01), true);
-			cpuState->regF.p = SetParityFlag(result, 8);
+			cpuState->regF.a = SetAuxiliaryFlag(cpuState->regA, opCode[1], false);
+			cpuState->regF.p = SetParityFlag((result & 0xff), 8);
 			cpuState->regF.c = (result > 0xff);
 			cpuState->programCounter++;
 			break;
@@ -2738,8 +2744,7 @@ internal_func void Emulate(CPUState *cpuState, unsigned char *castedMem)
 	OutputDebugStringA(cpuPrint);
 }
 
-
-s32 main()
+s32 CALLBACK WinMain(HINSTANCE currInstance, HINSTANCE prevInstance, LPSTR cmdLine, s32 showCode)
 {
 	CPUState cpuState = {};
 	cpuState.regF.unused1 = 0;
@@ -2767,26 +2772,26 @@ s32 main()
 	
 #if EMU8080_INTERNAL
 	/*
-u16 calledInstructions[0x100] = {};
-while (cpuState.programCounter < romSize)
-{
-
-// PRINT ROM HEX
-char tempPrint[32];
-sprintf_s(tempPrint, sizeof(tempPrint), "%02x %02x %02x %02x %02x %02x %02x %02x\n", printContents[i], printContents[i+1], printContents[i+2], printContents[i+3], printContents[i+4], printContents[i+5], printContents[i+6], printContents[i+7]);
-OutputDebugStringA(tempPrint);
-i += 8;
-tempPrint[0] = 0;
-
-// PRINT ROM ASM
-unsigned char *opCode = &castedMemContents[cpuState.programCounter];
-char tempPrint[32] = {};
-sprintf_s(tempPrint, sizeof(tempPrint), "%04x ", cpuState.programCounter);
-OutputDebugStringA(tempPrint);
-
-cpuState.programCounter += PrintDisassembly(tempPrint, opCode, &calledInstructions);
-}
-*/
+ u16 calledInstructions[0x100] = {};
+ while (cpuState.programCounter < romSize)
+ {
+ 
+ // PRINT ROM HEX
+ char tempPrint[32];
+ sprintf_s(tempPrint, sizeof(tempPrint), "%02x %02x %02x %02x %02x %02x %02x %02x\n", printContents[i], printContents[i+1], printContents[i+2], printContents[i+3], printContents[i+4], printContents[i+5], printContents[i+6], printContents[i+7]);
+ OutputDebugStringA(tempPrint);
+ i += 8;
+ tempPrint[0] = 0;
+ 
+ // PRINT ROM ASM
+ unsigned char *opCode = &castedMemContents[cpuState.programCounter];
+ char tempPrint[32] = {};
+ sprintf_s(tempPrint, sizeof(tempPrint), "%04x ", cpuState.programCounter);
+ OutputDebugStringA(tempPrint);
+ 
+ cpuState.programCounter += PrintDisassembly(tempPrint, opCode, &calledInstructions);
+ }
+ */
 #endif
 	
 	cpuState.memory[0] = 0xc3;
@@ -2801,19 +2806,19 @@ cpuState.programCounter += PrintDisassembly(tempPrint, opCode, &calledInstructio
 	}
 	
 	/*
-for (u16 i = 0x0000; i != 0x0100; ++i)
-{
-if (calledInstructions[i] != 0)
-{
-char tempPrint[32] = {};
-sprintf_s(tempPrint, sizeof(tempPrint), "%02x ", i);
-OutputDebugStringA(tempPrint);
-
-sprintf_s(tempPrint, sizeof(tempPrint), "%u\n", calledInstructions[i]);
-OutputDebugStringA(tempPrint);
-}
-}
-*/
+ for (u16 i = 0x0000; i != 0x0100; ++i)
+ {
+ if (calledInstructions[i] != 0)
+ {
+ char tempPrint[32] = {};
+ sprintf_s(tempPrint, sizeof(tempPrint), "%02x ", i);
+ OutputDebugStringA(tempPrint);
+ 
+ sprintf_s(tempPrint, sizeof(tempPrint), "%u\n", calledInstructions[i]);
+ OutputDebugStringA(tempPrint);
+ }
+ }
+ */
 	
 	VirtualFree(cpuState.memory, 0, MEM_RELEASE);
 	return 0;
