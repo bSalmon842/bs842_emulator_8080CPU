@@ -35,8 +35,8 @@ typedef double f64;
 
 struct CPUFlags
 {
-	u8 z : 1;
 	u8 s : 1;
+	u8 z : 1;
 	u8 unused1 : 1;
 	u8 a : 1;
 	u8 unused2 : 1;
