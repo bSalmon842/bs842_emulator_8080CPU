@@ -196,11 +196,11 @@ internal_func void ProcessMachineKeyUp(u8 *port, u8 key)
 
 internal_func void HandleINInst(CPUState *cpuState, u8 *opCode)
 {
-	switch(*opCode)
+	switch(opCode[1])
 	{
 		case 0x00:
 		{
-			cpuState->regA = 0x0F;
+			cpuState->regA = 0x01;
 			break;
 		}
 		

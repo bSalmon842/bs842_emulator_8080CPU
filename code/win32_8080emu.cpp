@@ -215,6 +215,7 @@ internal_func void Win32_Emulate(CPUState *cpuState, unsigned char *castedMem, s
 	
 	PrintDisassembly(cpuPrint, &castedMem[cpuState->programCounter]);
 #endif
+	
 	Emulate(cpuState, castedMem, cycles);
 	
 #if EMU8080_INTERNAL
@@ -329,7 +330,7 @@ s32 CALLBACK WinMain(HINSTANCE currInstance, HINSTANCE prevInstance, LPSTR cmdLi
 								{
 									ProcessMachineKeyDown(&cpuState.inputPort1, (u8)Port1MachineKeys::COIN);
 								}
-								else if (vkCode == VK_LSHIFT)
+								else if (vkCode == VK_SHIFT)
 								{
 									ProcessMachineKeyDown(&cpuState.inputPort1, (u8)Port1MachineKeys::P1START);
 								}
@@ -491,6 +492,8 @@ s32 CALLBACK WinMain(HINSTANCE currInstance, HINSTANCE prevInstance, LPSTR cmdLi
 						interruptNum = 1;
 					}
 					
+					RenderVideoMemContents(&backBuffer, &cpuState);
+					
 					nextInterrupt = now + (0.5 * targetMSPerInterrupt);
 				}
 				
@@ -505,7 +508,6 @@ s32 CALLBACK WinMain(HINSTANCE currInstance, HINSTANCE prevInstance, LPSTR cmdLi
 				
 				if ((now - lastFrame) >= 16.66667)
 				{
-					RenderVideoMemContents(&backBuffer, &cpuState);
 					Win32_WindowDimensions windowDim = Win32_GetWindowDimensions(window);
 					Win32_PresentBuffer(deviceContext, windowDim.width, windowDim.height, &globalBackBuffer);
 					lastFrame = now;
