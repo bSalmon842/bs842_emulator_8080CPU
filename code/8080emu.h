@@ -33,6 +33,9 @@ typedef double f64;
 #define ASSERT(expr)
 #endif
 
+#define KILOBYTES(value) ((value)*1024LL)
+#define MEGABYTES(value) (KILOBYTES(value)*1024LL)
+
 enum class Port1MachineKeys
 {
 	COIN,

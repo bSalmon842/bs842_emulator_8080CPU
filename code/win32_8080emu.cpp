@@ -25,17 +25,14 @@ MEMORY LAYOUT:
 */
 
 // TODO LIST
-// TODO(bSalmon): OUT Instruction
-// TODO(bSalmon): IN Instruction
-// TODO(bSalmon): Interrupts
 // TODO(bSalmon): Sound (?)
 // TODO(bSalmon): Rework Code to make Platform Specific and Non-Specific Functions obvious
 
 #include <Windows.h>
-#include <stdio.h>
 #include "8080emu.cpp"
 
 #if EMU8080_INTERNAL
+#include <stdio.h>
 #include "8080emu_disassemble.cpp"
 #endif
 
@@ -110,7 +107,7 @@ internal_func void Win32_PresentBuffer(HDC deviceContext, s32 windowWidth, s32 w
 				  SRCCOPY);
 }
 
-internal_func void MaintainWindowAspectRatio(HWND window, WPARAM wParam, LPARAM lParam)
+internal_func void Win32_MaintainWindowAspectRatio(HWND window, WPARAM wParam, LPARAM lParam)
 {
 	RECT *windowRect = (RECT *)lParam;
 	f32 aspectRatio = 7.0f/8.0f;
@@ -177,7 +174,7 @@ LRESULT CALLBACK WindowProc(HWND window, UINT msg, WPARAM wParam, LPARAM lParam)
 		
 		case WM_SIZING:
 		{
-			MaintainWindowAspectRatio(window, wParam, lParam);
+			Win32_MaintainWindowAspectRatio(window, wParam, lParam);
 			break;
 		}
 		
@@ -202,32 +199,142 @@ LRESULT CALLBACK WindowProc(HWND window, UINT msg, WPARAM wParam, LPARAM lParam)
 	return result;
 }
 
-internal_func void Win32_Emulate(CPUState *cpuState, unsigned char *castedMem, s32 *cycles)
+internal_func void Win32_HandleKeyDown(CPUState *cpuState, MSG message)
 {
-#if EMU8080_INTERNAL
-	local_persist u64 inCount = 0;
-	inCount++;
-	
-	char cpuPrint[128] = {};
-	
-	sprintf_s(cpuPrint, sizeof(cpuPrint), "\n\n%lld: ", inCount);
-	OutputDebugStringA(cpuPrint);
-	
-	PrintDisassembly(cpuPrint, &castedMem[cpuState->programCounter]);
-#endif
-	
-	Emulate(cpuState, castedMem, cycles);
-	
-#if EMU8080_INTERNAL
-	
-	sprintf_s(cpuPrint, sizeof(cpuPrint), "\tCPU FLAGS:\nS=%d,Z=%d,A=%d,P=%d,C=%d\n", cpuState->regF.s, cpuState->regF.z, cpuState->regF.a, cpuState->regF.p, cpuState->regF.c);
-	OutputDebugStringA(cpuPrint);
-	
-	u8 psw = BuildPSW(cpuState);
-	
-	sprintf_s(cpuPrint, sizeof(cpuPrint), "\tREGISTERS:\nA=%02x, F=%02x, B=%02x, C=%02x, D=%02x, E=%02x, H=%02x, L=%02x, SP=%04x, PC=%04x", cpuState->regA, psw, cpuState->regB, cpuState->regC, cpuState->regD, cpuState->regE, cpuState->regH, cpuState->regL, cpuState->stackPointer, cpuState->programCounter);
-	OutputDebugStringA(cpuPrint);
-#endif
+	u32 vkCode = (u32)message.wParam;
+	b32 keyWasDown = ((message.lParam & (1 << 30)) != 0);
+	b32 keyIsDown = ((message.lParam & (1 << 31)) == 0);
+	if (keyWasDown != keyIsDown)
+	{
+		// Port 1
+		if (vkCode == 'A')
+		{
+			ProcessMachineKeyDown(&cpuState->inputPort1, (u8)Port1MachineKeys::P1LEFT);
+		}
+		else if (vkCode == 'D')
+		{
+			ProcessMachineKeyDown(&cpuState->inputPort1, (u8)Port1MachineKeys::P1RIGHT);
+		}
+		else if (vkCode == VK_SPACE)
+		{
+			ProcessMachineKeyDown(&cpuState->inputPort1, (u8)Port1MachineKeys::P1SHOOT);
+		}
+		else if (vkCode == 'C')
+		{
+			ProcessMachineKeyDown(&cpuState->inputPort1, (u8)Port1MachineKeys::COIN);
+		}
+		else if (vkCode == VK_SHIFT)
+		{
+			ProcessMachineKeyDown(&cpuState->inputPort1, (u8)Port1MachineKeys::P1START);
+		}
+		else if (vkCode == VK_RETURN)
+		{
+			ProcessMachineKeyDown(&cpuState->inputPort1, (u8)Port1MachineKeys::P2START);
+		}
+		
+		// Port 2
+		else if (vkCode == VK_LEFT)
+		{
+			ProcessMachineKeyDown(&cpuState->inputPort2, (u8)Port2MachineKeys::P2LEFT);
+		}
+		else if (vkCode == VK_RIGHT)
+		{
+			ProcessMachineKeyDown(&cpuState->inputPort2, (u8)Port2MachineKeys::P2RIGHT);
+		}
+		else if (vkCode == VK_UP)
+		{
+			ProcessMachineKeyDown(&cpuState->inputPort2, (u8)Port2MachineKeys::P2SHOOT);
+		}
+		else if (vkCode == '6')
+		{
+			ProcessMachineKeyDown(&cpuState->inputPort2, (u8)Port2MachineKeys::DIPSWITCH1);
+		}
+		else if (vkCode == '7')
+		{
+			ProcessMachineKeyDown(&cpuState->inputPort2, (u8)Port2MachineKeys::DIPSWITCH2);
+		}
+		else if (vkCode == '8')
+		{
+			ProcessMachineKeyDown(&cpuState->inputPort2, (u8)Port2MachineKeys::TILT);
+		}
+		else if (vkCode == '9')
+		{
+			ProcessMachineKeyDown(&cpuState->inputPort2, (u8)Port2MachineKeys::DIPSWITCHBONUS);
+		}
+		else if (vkCode == '0')
+		{
+			ProcessMachineKeyDown(&cpuState->inputPort2, (u8)Port2MachineKeys::DIPSWITCHCOIN);
+		}
+	}
+}
+
+internal_func void Win32_HandleKeyUp(CPUState *cpuState, MSG message)
+{
+	u32 vkCode = (u32)message.wParam;
+	b32 keyWasDown = ((message.lParam & (1 << 30)) != 0);
+	b32 keyIsDown = ((message.lParam & (1 << 31)) == 0);
+	if (keyWasDown != keyIsDown)
+	{
+		// Port 1
+		if (vkCode == 'A')
+		{
+			ProcessMachineKeyUp(&cpuState->inputPort1, (u8)Port1MachineKeys::P1LEFT);
+		}
+		else if (vkCode == 'D')
+		{
+			ProcessMachineKeyUp(&cpuState->inputPort1, (u8)Port1MachineKeys::P1RIGHT);
+		}
+		else if (vkCode == VK_SPACE)
+		{
+			ProcessMachineKeyUp(&cpuState->inputPort1, (u8)Port1MachineKeys::P1SHOOT);
+		}
+		else if (vkCode == 'C')
+		{
+			ProcessMachineKeyUp(&cpuState->inputPort1, (u8)Port1MachineKeys::COIN);
+		}
+		else if (vkCode == VK_SHIFT)
+		{
+			ProcessMachineKeyUp(&cpuState->inputPort1, (u8)Port1MachineKeys::P1START);
+		}
+		else if (vkCode == VK_RETURN)
+		{
+			ProcessMachineKeyUp(&cpuState->inputPort1, (u8)Port1MachineKeys::P2START);
+		}
+		
+		// Port 2
+		else if (vkCode == VK_LEFT)
+		{
+			ProcessMachineKeyUp(&cpuState->inputPort2, (u8)Port2MachineKeys::P2LEFT);
+		}
+		else if (vkCode == VK_RIGHT)
+		{
+			ProcessMachineKeyUp(&cpuState->inputPort2, (u8)Port2MachineKeys::P2RIGHT);
+		}
+		else if (vkCode == VK_UP)
+		{
+			ProcessMachineKeyUp(&cpuState->inputPort2, (u8)Port2MachineKeys::P2SHOOT);
+		}
+		else if (vkCode == '6')
+		{
+			ProcessMachineKeyUp(&cpuState->inputPort2, (u8)Port2MachineKeys::DIPSWITCH1);
+		}
+		else if (vkCode == '7')
+		{
+			ProcessMachineKeyUp(&cpuState->inputPort2, (u8)Port2MachineKeys::DIPSWITCH2);
+		}
+		else if (vkCode == '8')
+		{
+			ProcessMachineKeyUp(&cpuState->inputPort2, (u8)Port2MachineKeys::TILT);
+		}
+		else if (vkCode == '9')
+		{
+			ProcessMachineKeyUp(&cpuState->inputPort2, (u8)Port2MachineKeys::DIPSWITCHBONUS);
+		}
+		else if (vkCode == '0')
+		{
+			ProcessMachineKeyUp(&cpuState->inputPort2, (u8)Port2MachineKeys::DIPSWITCHCOIN);
+		}
+	}
 }
 
 s32 CALLBACK WinMain(HINSTANCE currInstance, HINSTANCE prevInstance, LPSTR cmdLine, s32 showCode)
@@ -249,7 +356,7 @@ s32 CALLBACK WinMain(HINSTANCE currInstance, HINSTANCE prevInstance, LPSTR cmdLi
 	cpuState.shiftOffset = 0;
 	cpuState.inputPort1 = 0;
 	cpuState.inputPort2 = 0;
-	cpuState.memory = (u8 *)VirtualAlloc(0, 0x5000, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
+	cpuState.memory = (u8 *)VirtualAlloc(0, MEGABYTES(1), MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
 	
 	char *romFilename = "invaders.eer";
 	u16 romSize = 0x2000;
@@ -308,143 +415,14 @@ s32 CALLBACK WinMain(HINSTANCE currInstance, HINSTANCE prevInstance, LPSTR cmdLi
 						case WM_SYSKEYDOWN:
 						case WM_KEYDOWN:
 						{
-							u32 vkCode = (u32)message.wParam;
-							b32 keyWasDown = ((message.lParam & (1 << 30)) != 0);
-							b32 keyIsDown = ((message.lParam & (1 << 31)) == 0);
-							if (keyWasDown != keyIsDown)
-							{
-								// Port 1
-								if (vkCode == 'A')
-								{
-									ProcessMachineKeyDown(&cpuState.inputPort1, (u8)Port1MachineKeys::P1LEFT);
-								}
-								else if (vkCode == 'D')
-								{
-									ProcessMachineKeyDown(&cpuState.inputPort1, (u8)Port1MachineKeys::P1RIGHT);
-								}
-								else if (vkCode == VK_SPACE)
-								{
-									ProcessMachineKeyDown(&cpuState.inputPort1, (u8)Port1MachineKeys::P1SHOOT);
-								}
-								else if (vkCode == 'C')
-								{
-									ProcessMachineKeyDown(&cpuState.inputPort1, (u8)Port1MachineKeys::COIN);
-								}
-								else if (vkCode == VK_SHIFT)
-								{
-									ProcessMachineKeyDown(&cpuState.inputPort1, (u8)Port1MachineKeys::P1START);
-								}
-								else if (vkCode == VK_RETURN)
-								{
-									ProcessMachineKeyDown(&cpuState.inputPort1, (u8)Port1MachineKeys::P2START);
-								}
-								
-								// Port 2
-								else if (vkCode == VK_LEFT)
-								{
-									ProcessMachineKeyDown(&cpuState.inputPort2, (u8)Port2MachineKeys::P2LEFT);
-								}
-								else if (vkCode == VK_RIGHT)
-								{
-									ProcessMachineKeyDown(&cpuState.inputPort2, (u8)Port2MachineKeys::P2RIGHT);
-								}
-								else if (vkCode == VK_UP)
-								{
-									ProcessMachineKeyDown(&cpuState.inputPort2, (u8)Port2MachineKeys::P2SHOOT);
-								}
-								else if (vkCode == '6')
-								{
-									ProcessMachineKeyDown(&cpuState.inputPort2, (u8)Port2MachineKeys::DIPSWITCH1);
-								}
-								else if (vkCode == '7')
-								{
-									ProcessMachineKeyDown(&cpuState.inputPort2, (u8)Port2MachineKeys::DIPSWITCH2);
-								}
-								else if (vkCode == '8')
-								{
-									ProcessMachineKeyDown(&cpuState.inputPort2, (u8)Port2MachineKeys::TILT);
-								}
-								else if (vkCode == '9')
-								{
-									ProcessMachineKeyDown(&cpuState.inputPort2, (u8)Port2MachineKeys::DIPSWITCHBONUS);
-								}
-								else if (vkCode == '0')
-								{
-									ProcessMachineKeyDown(&cpuState.inputPort2, (u8)Port2MachineKeys::DIPSWITCHCOIN);
-								}
-							}
-							
+							Win32_HandleKeyDown(&cpuState, message);
 							break;
 						}
 						
 						case WM_SYSKEYUP:
 						case WM_KEYUP:
 						{
-							u32 vkCode = (u32)message.wParam;
-							b32 keyWasDown = ((message.lParam & (1 << 30)) != 0);
-							b32 keyIsDown = ((message.lParam & (1 << 31)) == 0);
-							if (keyWasDown != keyIsDown)
-							{
-								// Port 1
-								if (vkCode == 'A')
-								{
-									ProcessMachineKeyUp(&cpuState.inputPort1, (u8)Port1MachineKeys::P1LEFT);
-								}
-								else if (vkCode == 'D')
-								{
-									ProcessMachineKeyUp(&cpuState.inputPort1, (u8)Port1MachineKeys::P1RIGHT);
-								}
-								else if (vkCode == VK_SPACE)
-								{
-									ProcessMachineKeyUp(&cpuState.inputPort1, (u8)Port1MachineKeys::P1SHOOT);
-								}
-								else if (vkCode == 'C')
-								{
-									ProcessMachineKeyUp(&cpuState.inputPort1, (u8)Port1MachineKeys::COIN);
-								}
-								else if (vkCode == VK_LSHIFT)
-								{
-									ProcessMachineKeyUp(&cpuState.inputPort1, (u8)Port1MachineKeys::P1START);
-								}
-								else if (vkCode == VK_RETURN)
-								{
-									ProcessMachineKeyUp(&cpuState.inputPort1, (u8)Port1MachineKeys::P2START);
-								}
-								
-								// Port 2
-								else if (vkCode == VK_LEFT)
-								{
-									ProcessMachineKeyUp(&cpuState.inputPort2, (u8)Port2MachineKeys::P2LEFT);
-								}
-								else if (vkCode == VK_RIGHT)
-								{
-									ProcessMachineKeyUp(&cpuState.inputPort2, (u8)Port2MachineKeys::P2RIGHT);
-								}
-								else if (vkCode == VK_UP)
-								{
-									ProcessMachineKeyUp(&cpuState.inputPort2, (u8)Port2MachineKeys::P2SHOOT);
-								}
-								else if (vkCode == '6')
-								{
-									ProcessMachineKeyUp(&cpuState.inputPort2, (u8)Port2MachineKeys::DIPSWITCH1);
-								}
-								else if (vkCode == '7')
-								{
-									ProcessMachineKeyUp(&cpuState.inputPort2, (u8)Port2MachineKeys::DIPSWITCH2);
-								}
-								else if (vkCode == '8')
-								{
-									ProcessMachineKeyUp(&cpuState.inputPort2, (u8)Port2MachineKeys::TILT);
-								}
-								else if (vkCode == '9')
-								{
-									ProcessMachineKeyUp(&cpuState.inputPort2, (u8)Port2MachineKeys::DIPSWITCHBONUS);
-								}
-								else if (vkCode == '0')
-								{
-									ProcessMachineKeyUp(&cpuState.inputPort2, (u8)Port2MachineKeys::DIPSWITCHCOIN);
-								}
-							}
+							Win32_HandleKeyUp(&cpuState, message);
 							break;
 						}
 						
@@ -470,7 +448,7 @@ s32 CALLBACK WinMain(HINSTANCE currInstance, HINSTANCE prevInstance, LPSTR cmdLi
 				backBuffer.bytesPerPixel = globalBackBuffer.bytesPerPixel;
 				
 				f64 now = GetTickCount();
-				s32 cycles = 0;
+				u64 cycles = 0;
 				
 				if (lastTimer == 0.0f)
 				{
@@ -498,11 +476,34 @@ s32 CALLBACK WinMain(HINSTANCE currInstance, HINSTANCE prevInstance, LPSTR cmdLi
 				}
 				
 				f64 sinceLast = now - lastTimer;
-				s32 cyclesToCatchUp = 200 * sinceLast;
+				s32 cyclesToCatchUp = 2000 * sinceLast;
 				
 				while (cyclesToCatchUp > cycles)
 				{
-					Win32_Emulate(&cpuState, castedMemContents, &cycles);
+					local_persist u64 inCount = 0;
+					inCount++;
+#if EMU8080_INTERNAL
+					
+					char cpuPrint[128] = {};
+					
+					sprintf_s(cpuPrint, sizeof(cpuPrint), "\n\n%lld: ", inCount);
+					OutputDebugStringA(cpuPrint);
+					
+					PrintDisassembly(cpuPrint, &castedMemContents[cpuState.programCounter]);
+#endif
+					
+					Emulate(&cpuState, castedMemContents, &cycles);
+					
+#if EMU8080_INTERNAL
+					
+					sprintf_s(cpuPrint, sizeof(cpuPrint), "\tCPU FLAGS:\nS=%d,Z=%d,A=%d,P=%d,C=%d\n", cpuState.regF.s, cpuState.regF.z, cpuState.regF.a, cpuState.regF.p, cpuState.regF.c);
+					OutputDebugStringA(cpuPrint);
+					
+					u8 psw = BuildPSW(&cpuState);
+					
+					sprintf_s(cpuPrint, sizeof(cpuPrint), "\tREGISTERS:\nA=%02x, F=%02x, B=%02x, C=%02x, D=%02x, E=%02x, H=%02x, L=%02x, SP=%04x, PC=%04x", cpuState.regA, psw, cpuState.regB, cpuState.regC, cpuState.regD, cpuState.regE, cpuState.regH, cpuState.regL, cpuState.stackPointer, cpuState.programCounter);
+					OutputDebugStringA(cpuPrint);
+#endif
 				}
 				
 				
