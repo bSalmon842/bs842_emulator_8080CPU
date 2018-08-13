@@ -2,7 +2,6 @@
 Project: Intel 8080 CPU Emulator
 File: win32_8080emu.h
 Author: Brock Salmon
-Notice: (C) Copyright 2018 by Brock Salmon. All Rights Reserved.
 */
 
 // Static Definitions

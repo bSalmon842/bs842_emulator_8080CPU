@@ -2,7 +2,6 @@
 Project: Intel 8080 CPU Emulator
 File: 8080emu_disassemble.cpp
 Author: Brock Salmon
-Notice: (C) Copyright 2018 by Brock Salmon. All Rights Reserved.
 */
 
 #if EMU8080_INTERNAL

@@ -2,7 +2,6 @@
 Project: Intel 8080 CPU Emulator
 File: 8080emu.cpp
 Author: Brock Salmon
-Notice: (C) Copyright 2018 by Brock Salmon. All Rights Reserved.
 */
 
 #include "8080emu.h"

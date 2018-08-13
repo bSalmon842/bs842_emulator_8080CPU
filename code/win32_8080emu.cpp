@@ -2,7 +2,6 @@
 Project: Intel 8080 CPU Emulator
 File: win32_8080emu.cpp
 Author: Brock Salmon
-Notice: (C) Copyright 2018 by Brock Salmon. All Rights Reserved.
 */
 
 /*
@@ -13,19 +12,20 @@ NOTE(bSalmon):
 1 - Dev Build
 
 8080_SLOW:
- 0 - Debugging Code Disabled
- 1 - Non-performant debugging code enabled
+ 0 - Assert Code Disabled
+ 1 - Assert debugging code enabled
 */
 
 /*
-MEMORY LAYOUT:
+EMULATOR MEMORY LAYOUT:
 0000 - 1fff: ROM Memory
 2000 - 23ff: Work RAM
 2400 - 3fff: Video RAM
 */
 
 // TODO LIST
-// TODO(bSalmon): Sound (?)
+// TODO(bSalmon): Sound (Put off for the time being as it would be
+// difficult to implement without external libraries being used
 // TODO(bSalmon): Rework Code to make Platform Specific and Non-Specific Functions obvious
 
 #include <Windows.h>
@@ -412,6 +412,7 @@ s32 CALLBACK WinMain(HINSTANCE currInstance, HINSTANCE prevInstance, LPSTR cmdLi
 				{
 					switch(message.message)
 					{
+						// NOTE(bSalmon): Input is built around the original Space Invaders Hardware
 						case WM_SYSKEYDOWN:
 						case WM_KEYDOWN:
 						{
@@ -480,9 +481,9 @@ s32 CALLBACK WinMain(HINSTANCE currInstance, HINSTANCE prevInstance, LPSTR cmdLi
 				
 				while (cyclesToCatchUp > cycles)
 				{
+#if EMU8080_INTERNAL
 					local_persist u64 inCount = 0;
 					inCount++;
-#if EMU8080_INTERNAL
 					
 					char cpuPrint[128] = {};
 					
@@ -495,7 +496,6 @@ s32 CALLBACK WinMain(HINSTANCE currInstance, HINSTANCE prevInstance, LPSTR cmdLi
 					Emulate(&cpuState, castedMemContents, &cycles);
 					
 #if EMU8080_INTERNAL
-					
 					sprintf_s(cpuPrint, sizeof(cpuPrint), "\tCPU FLAGS:\nS=%d,Z=%d,A=%d,P=%d,C=%d\n", cpuState.regF.s, cpuState.regF.z, cpuState.regF.a, cpuState.regF.p, cpuState.regF.c);
 					OutputDebugStringA(cpuPrint);
 					
