@@ -10,3 +10,6 @@ Currently it is in a state that can be considered 'Complete', however further ad
   - Load ROMs
   - Enable/Disable Colour
   - Save/Load Game State
+  
+- Unlikely but possible addition
+  - Sound Support
