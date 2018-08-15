@@ -20,29 +20,29 @@ limitations under the License.
 
 #include "8080emu.h"
 
-internal_func u8 SetZeroFlag(u16 value)
+inline u8 SetZeroFlag(u16 value)
 {
 	return ((value & 0xff) == 0x00);
 }
 
-internal_func u8 SetSignFlag(u16 value)
+inline u8 SetSignFlag(u16 value)
 {
 	return ((value & (1<<7)) == (1<<7));
 }
 
-internal_func u8 SetAuxiliaryFlag(u8 a, u16 b)
+inline u8 SetAuxiliaryFlag(u8 reg, u16 result)
 {
-	return ((a & 0x0f) > (b & 0x000f));
+	return ((reg & 0x0f) > (result & 0x000f));
 }
 
-internal_func u8 SetParityFlag(u8 x)
+internal_func u8 SetParityFlag(u8 value)
 {
 	u8 bitMask = 1;
 	u8 parityByteCount = 0;
 	
 	while (bitMask)
 	{
-		if (x & bitMask)
+		if (value & bitMask)
 		{
 			parityByteCount++;
 		}
@@ -201,7 +201,7 @@ internal_func void ProcessMachineKeyUp(u8 *port, u8 key)
 	}
 }
 
-internal_func void HandleINInst(CPUState *cpuState, u8 *opCode)
+internal_func void HandleINInst(CPUState *cpuState, MachineState *machine, u8 *opCode)
 {
 	switch(opCode[1])
 	{
@@ -213,20 +213,20 @@ internal_func void HandleINInst(CPUState *cpuState, u8 *opCode)
 		
 		case 0x01:
 		{
-			cpuState->regA = cpuState->inputPort1;
+			cpuState->regA = machine->inputPort1;
 			break;
 		}
 		
 		case 0x02:
 		{
-			cpuState->regA = cpuState->inputPort2;
+			cpuState->regA = machine->inputPort2;
 			break;
 		}
 		
 		case 0x03:
 		{
-			u16 v = (cpuState->shift1 << 8) | cpuState->shift0;
-			cpuState->regA = (v >> (8 - cpuState->shiftOffset)) & 0xff;
+			u16 value = (machine->shift1 << 8) | machine->shift0;
+			cpuState->regA = (value >> (8 - machine->shiftOffset)) & 0xff;
 			break;
 		}
 		default:
@@ -236,19 +236,19 @@ internal_func void HandleINInst(CPUState *cpuState, u8 *opCode)
 	}
 }
 
-internal_func void HandleOUTInst(CPUState *cpuState, u8 *opCode)
+internal_func void HandleOUTInst(CPUState *cpuState, MachineState *machine, u8 *opCode)
 {
 	switch(opCode[1])
 	{
 		case 0x02:
 		{
-			cpuState->shiftOffset = cpuState->regA & 0x07;
+			machine->shiftOffset = cpuState->regA & 0x07;
 			break;
 		}
 		case 0x04:
 		{
-			cpuState->shift0 = cpuState->shift1;
-			cpuState->shift1 = cpuState->regA;
+			machine->shift0 = machine->shift1;
+			machine->shift1 = cpuState->regA;
 			break;
 		}
 		default:
@@ -258,13 +258,26 @@ internal_func void HandleOUTInst(CPUState *cpuState, u8 *opCode)
 	}
 }
 
-internal_func void RenderVideoMemContents(BackBuffer *backBuffer, CPUState *cpuState)
+internal_func void RenderVideoMemContents(BackBuffer *backBuffer, CPUState *cpuState, b32 enableColour)
 {
 	// Pixel Colours
+	
 	u32 white = 0xFFFFFFFF;
-	u32 red = 0xFFFF0000;
-	u32 green = 0xFF00FF00;
 	u32 black = 0xFF000000;
+	u32 red;
+	u32 green;
+	
+	// If Colour is not enabled, red and green are set to white;
+	if (enableColour)
+	{
+		red = 0xFFFF0000;
+		green = 0xFF00FF00;
+	}
+	else
+	{
+		red = white;
+		green = white;
+	}
 	
 	u8 *screenBuffer = (u8 *)backBuffer->memory;
 	u8 *videoBuffer = &cpuState->memory[0x2400];
@@ -328,7 +341,7 @@ internal_func void Interrupt(CPUState *cpuState, u8 interruptNum, u64 *cycles)
 	*cycles += 4;
 }
 
-internal_func void Emulate(CPUState *cpuState, unsigned char *castedMem, u64 *cycles)
+internal_func void Emulate(CPUState *cpuState, MachineState *machine, unsigned char *castedMem, u64 *cycles)
 {
 	u8 *opCode = &castedMem[cpuState->programCounter];
 	b32 altCycles = false;
@@ -2470,7 +2483,7 @@ internal_func void Emulate(CPUState *cpuState, unsigned char *castedMem, u64 *cy
 		case 0xd3:
 		{
 			// OUT a8
-			HandleOUTInst(cpuState, opCode);
+			HandleOUTInst(cpuState, machine, opCode);
 			cpuState->programCounter++;
 			break;
 		}
@@ -2569,7 +2582,7 @@ internal_func void Emulate(CPUState *cpuState, unsigned char *castedMem, u64 *cy
 		case 0xdb:
 		{
 			// IN a8;
-			HandleINInst(cpuState, opCode);
+			HandleINInst(cpuState, machine, opCode);
 			cpuState->programCounter++;
 			break;
 		}

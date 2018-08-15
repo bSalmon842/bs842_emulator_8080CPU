@@ -100,16 +100,24 @@ struct CPUState
 	u8 regL;
 	
 	u8 *memory;
-	u8 enableInterrupt;
+	b32 enableInterrupt;
 	u16 stackPointer;
 	u16 programCounter;
-	
+};
+
+struct MachineState
+{
 	u8 shift0;
 	u8 shift1;
 	u8 shiftOffset;
 	
 	u8 inputPort1;
 	u8 inputPort2;
+	
+	char romFilename[256];
+	u16 romSize;
+	
+	b32 enableColour;
 };
 
 struct BackBuffer

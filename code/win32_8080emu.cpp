@@ -67,8 +67,14 @@ struct Win32_WindowDimensions
 	s32 height;
 };
 
+struct Win32_Menus
+{
+	HMENU emulatorOptions;
+	HMENU settings;
+};
+
 global_var b32 globalRunning;
-global_var Win32_BackBuffer globalBackBuffer;
+global_var Win32_BackBuffer globalBackBuffer = {};
 
 // Return a struct containing the height and width of the window bitmap
 internal_func Win32_WindowDimensions Win32_GetWindowDimensions(HWND window)
@@ -119,6 +125,105 @@ internal_func void Win32_PresentBuffer(HDC deviceContext, s32 windowWidth, s32 w
 				  &buffer->info,
 				  DIB_RGB_COLORS,
 				  SRCCOPY);
+}
+
+internal_func void Win32_ResetEmulator(CPUState *cpuState, MachineState *machine)
+{
+	// NOTE(bSalmon): This function is for clearing the memory of and resetting the emulator,
+	// however, the romSize and romFilename are left alone, as this function is used
+	// on Loading a new ROM
+	
+	// Reset Emulator Memory
+	if (cpuState->memory)
+	{
+		VirtualFree(cpuState->memory, 0, MEM_RELEASE);
+	}
+	
+	cpuState->regA = 0x00;
+	cpuState->regF = {};
+	
+	cpuState->regB = 0x00;
+	cpuState->regC = 0x00;
+	
+	cpuState->regD = 0x00;
+	cpuState->regE = 0x00;
+	
+	cpuState->regH = 0x00;
+	cpuState->regL = 0x00;
+	
+	cpuState->memory = 0;
+	cpuState->enableInterrupt = false;
+	cpuState->stackPointer = 0x0000;
+	cpuState->programCounter = 0x0000;
+	
+	machine->shift0 = 0x00;
+	machine->shift1 = 0x00;
+	machine->shiftOffset = 0x00;
+	
+	machine->inputPort1 = 0x00;
+	machine->inputPort2 = 0x00;
+}
+
+internal_func void Win32_LoadROM(CPUState *cpuState, MachineState *machine)
+{
+	Win32_ResetEmulator(cpuState, machine);
+	cpuState->memory = (u8 *)VirtualAlloc(0, MEGABYTES(1), MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
+	
+	HANDLE romHandle =  CreateFileA(machine->romFilename, GENERIC_READ, FILE_SHARE_READ, 0, OPEN_EXISTING, 0, 0);
+	if (romHandle != INVALID_HANDLE_VALUE)
+	{
+		if (cpuState->memory)
+		{
+			DWORD bytesRead;
+			ReadFile(romHandle, cpuState->memory, machine->romSize, &bytesRead, 0);
+		}
+		
+		CloseHandle(romHandle);
+	}
+}
+
+internal_func void Win32_HandleMenuCommands(CPUState *cpuState, MachineState *machine, Win32_Menus menus, HWND window, WPARAM wParam, LPARAM lParam)
+{
+	// NOTE(bSalmon): Emulator Options and Settings currently only have one item so there is no need for nested if statements
+	HMENU selectedMenu = (HMENU)lParam;
+	s32 itemPos = wParam;
+	if (selectedMenu == menus.emulatorOptions)
+	{
+		OPENFILENAMEA openFileNameInfo = {};
+		openFileNameInfo.lStructSize = sizeof(OPENFILENAMEA);
+		openFileNameInfo.hwndOwner = window;
+		openFileNameInfo.lpstrFilter = "All Files\0*.*\0\0";
+		openFileNameInfo.lpstrFile = machine->romFilename;
+		openFileNameInfo.nMaxFile = 256;
+		openFileNameInfo.lpstrTitle = "Open 8080 ROM File";
+		openFileNameInfo.Flags = OFN_PATHMUSTEXIST | OFN_FILEMUSTEXIST;
+		if (GetOpenFileNameA(&openFileNameInfo))
+		{
+			Win32_LoadROM(cpuState, machine);
+		}
+	}
+	else if (selectedMenu == menus.settings)
+	{
+		MENUITEMINFOA menuItemInfo = {};
+		menuItemInfo.cbSize = sizeof(MENUITEMINFOA);
+		if (machine->enableColour)
+		{
+			menuItemInfo.fMask = MIIM_CHECKMARKS | MIIM_FTYPE | MIIM_STATE | MIIM_STRING ;
+			menuItemInfo.fType = MFT_STRING;
+			menuItemInfo.fState = MFS_UNCHECKED;
+			menuItemInfo.dwTypeData = "Enable Colour";
+			machine->enableColour = false;
+		}
+		else
+		{
+			menuItemInfo.fMask = MIIM_CHECKMARKS | MIIM_FTYPE | MIIM_STATE | MIIM_STRING ;
+			menuItemInfo.fType = MFT_STRING;
+			menuItemInfo.fState = MFS_CHECKED;
+			menuItemInfo.dwTypeData = "Enable Colour";
+			machine->enableColour = true;
+		}
+		SetMenuItemInfo(selectedMenu, itemPos, TRUE, &menuItemInfo);
+	}
 }
 
 internal_func void Win32_MaintainWindowAspectRatio(HWND window, WPARAM wParam, LPARAM lParam)
@@ -174,7 +279,7 @@ internal_func void Win32_MaintainWindowAspectRatio(HWND window, WPARAM wParam, L
 				 newWidth, newHeight, 0);
 }
 
-LRESULT CALLBACK WindowProc(HWND window, UINT msg, WPARAM wParam, LPARAM lParam)
+LRESULT CALLBACK Win32_WindowProc(HWND window, UINT msg, WPARAM wParam, LPARAM lParam)
 {
 	LRESULT result = 0;
 	
@@ -213,7 +318,7 @@ LRESULT CALLBACK WindowProc(HWND window, UINT msg, WPARAM wParam, LPARAM lParam)
 	return result;
 }
 
-internal_func void Win32_HandleKeyDown(CPUState *cpuState, MSG message)
+internal_func void Win32_HandleKeyDown(CPUState *cpuState, MachineState *machine, MSG message)
 {
 	u32 vkCode = (u32)message.wParam;
 	b32 keyWasDown = ((message.lParam & (1 << 30)) != 0);
@@ -223,66 +328,66 @@ internal_func void Win32_HandleKeyDown(CPUState *cpuState, MSG message)
 		// Port 1
 		if (vkCode == 'A')
 		{
-			ProcessMachineKeyDown(&cpuState->inputPort1, (u8)Port1MachineKeys::P1LEFT);
+			ProcessMachineKeyDown(&machine->inputPort1, (u8)Port1MachineKeys::P1LEFT);
 		}
 		else if (vkCode == 'D')
 		{
-			ProcessMachineKeyDown(&cpuState->inputPort1, (u8)Port1MachineKeys::P1RIGHT);
+			ProcessMachineKeyDown(&machine->inputPort1, (u8)Port1MachineKeys::P1RIGHT);
 		}
 		else if (vkCode == VK_SPACE)
 		{
-			ProcessMachineKeyDown(&cpuState->inputPort1, (u8)Port1MachineKeys::P1SHOOT);
+			ProcessMachineKeyDown(&machine->inputPort1, (u8)Port1MachineKeys::P1SHOOT);
 		}
 		else if (vkCode == 'C')
 		{
-			ProcessMachineKeyDown(&cpuState->inputPort1, (u8)Port1MachineKeys::COIN);
+			ProcessMachineKeyDown(&machine->inputPort1, (u8)Port1MachineKeys::COIN);
 		}
 		else if (vkCode == VK_SHIFT)
 		{
-			ProcessMachineKeyDown(&cpuState->inputPort1, (u8)Port1MachineKeys::P1START);
+			ProcessMachineKeyDown(&machine->inputPort1, (u8)Port1MachineKeys::P1START);
 		}
 		else if (vkCode == VK_RETURN)
 		{
-			ProcessMachineKeyDown(&cpuState->inputPort1, (u8)Port1MachineKeys::P2START);
+			ProcessMachineKeyDown(&machine->inputPort1, (u8)Port1MachineKeys::P2START);
 		}
 		
 		// Port 2
 		else if (vkCode == VK_LEFT)
 		{
-			ProcessMachineKeyDown(&cpuState->inputPort2, (u8)Port2MachineKeys::P2LEFT);
+			ProcessMachineKeyDown(&machine->inputPort2, (u8)Port2MachineKeys::P2LEFT);
 		}
 		else if (vkCode == VK_RIGHT)
 		{
-			ProcessMachineKeyDown(&cpuState->inputPort2, (u8)Port2MachineKeys::P2RIGHT);
+			ProcessMachineKeyDown(&machine->inputPort2, (u8)Port2MachineKeys::P2RIGHT);
 		}
 		else if (vkCode == VK_UP)
 		{
-			ProcessMachineKeyDown(&cpuState->inputPort2, (u8)Port2MachineKeys::P2SHOOT);
+			ProcessMachineKeyDown(&machine->inputPort2, (u8)Port2MachineKeys::P2SHOOT);
 		}
 		else if (vkCode == '6')
 		{
-			ProcessMachineKeyDown(&cpuState->inputPort2, (u8)Port2MachineKeys::DIPSWITCH1);
+			ProcessMachineKeyDown(&machine->inputPort2, (u8)Port2MachineKeys::DIPSWITCH1);
 		}
 		else if (vkCode == '7')
 		{
-			ProcessMachineKeyDown(&cpuState->inputPort2, (u8)Port2MachineKeys::DIPSWITCH2);
+			ProcessMachineKeyDown(&machine->inputPort2, (u8)Port2MachineKeys::DIPSWITCH2);
 		}
 		else if (vkCode == '8')
 		{
-			ProcessMachineKeyDown(&cpuState->inputPort2, (u8)Port2MachineKeys::TILT);
+			ProcessMachineKeyDown(&machine->inputPort2, (u8)Port2MachineKeys::TILT);
 		}
 		else if (vkCode == '9')
 		{
-			ProcessMachineKeyDown(&cpuState->inputPort2, (u8)Port2MachineKeys::DIPSWITCHBONUS);
+			ProcessMachineKeyDown(&machine->inputPort2, (u8)Port2MachineKeys::DIPSWITCHBONUS);
 		}
 		else if (vkCode == '0')
 		{
-			ProcessMachineKeyDown(&cpuState->inputPort2, (u8)Port2MachineKeys::DIPSWITCHCOIN);
+			ProcessMachineKeyDown(&machine->inputPort2, (u8)Port2MachineKeys::DIPSWITCHCOIN);
 		}
 	}
 }
 
-internal_func void Win32_HandleKeyUp(CPUState *cpuState, MSG message)
+internal_func void Win32_HandleKeyUp(CPUState *cpuState, MachineState *machine, MSG message)
 {
 	u32 vkCode = (u32)message.wParam;
 	b32 keyWasDown = ((message.lParam & (1 << 30)) != 0);
@@ -292,61 +397,61 @@ internal_func void Win32_HandleKeyUp(CPUState *cpuState, MSG message)
 		// Port 1
 		if (vkCode == 'A')
 		{
-			ProcessMachineKeyUp(&cpuState->inputPort1, (u8)Port1MachineKeys::P1LEFT);
+			ProcessMachineKeyUp(&machine->inputPort1, (u8)Port1MachineKeys::P1LEFT);
 		}
 		else if (vkCode == 'D')
 		{
-			ProcessMachineKeyUp(&cpuState->inputPort1, (u8)Port1MachineKeys::P1RIGHT);
+			ProcessMachineKeyUp(&machine->inputPort1, (u8)Port1MachineKeys::P1RIGHT);
 		}
 		else if (vkCode == VK_SPACE)
 		{
-			ProcessMachineKeyUp(&cpuState->inputPort1, (u8)Port1MachineKeys::P1SHOOT);
+			ProcessMachineKeyUp(&machine->inputPort1, (u8)Port1MachineKeys::P1SHOOT);
 		}
 		else if (vkCode == 'C')
 		{
-			ProcessMachineKeyUp(&cpuState->inputPort1, (u8)Port1MachineKeys::COIN);
+			ProcessMachineKeyUp(&machine->inputPort1, (u8)Port1MachineKeys::COIN);
 		}
 		else if (vkCode == VK_SHIFT)
 		{
-			ProcessMachineKeyUp(&cpuState->inputPort1, (u8)Port1MachineKeys::P1START);
+			ProcessMachineKeyUp(&machine->inputPort1, (u8)Port1MachineKeys::P1START);
 		}
 		else if (vkCode == VK_RETURN)
 		{
-			ProcessMachineKeyUp(&cpuState->inputPort1, (u8)Port1MachineKeys::P2START);
+			ProcessMachineKeyUp(&machine->inputPort1, (u8)Port1MachineKeys::P2START);
 		}
 		
 		// Port 2
 		else if (vkCode == VK_LEFT)
 		{
-			ProcessMachineKeyUp(&cpuState->inputPort2, (u8)Port2MachineKeys::P2LEFT);
+			ProcessMachineKeyUp(&machine->inputPort2, (u8)Port2MachineKeys::P2LEFT);
 		}
 		else if (vkCode == VK_RIGHT)
 		{
-			ProcessMachineKeyUp(&cpuState->inputPort2, (u8)Port2MachineKeys::P2RIGHT);
+			ProcessMachineKeyUp(&machine->inputPort2, (u8)Port2MachineKeys::P2RIGHT);
 		}
 		else if (vkCode == VK_UP)
 		{
-			ProcessMachineKeyUp(&cpuState->inputPort2, (u8)Port2MachineKeys::P2SHOOT);
+			ProcessMachineKeyUp(&machine->inputPort2, (u8)Port2MachineKeys::P2SHOOT);
 		}
 		else if (vkCode == '6')
 		{
-			ProcessMachineKeyUp(&cpuState->inputPort2, (u8)Port2MachineKeys::DIPSWITCH1);
+			ProcessMachineKeyUp(&machine->inputPort2, (u8)Port2MachineKeys::DIPSWITCH1);
 		}
 		else if (vkCode == '7')
 		{
-			ProcessMachineKeyUp(&cpuState->inputPort2, (u8)Port2MachineKeys::DIPSWITCH2);
+			ProcessMachineKeyUp(&machine->inputPort2, (u8)Port2MachineKeys::DIPSWITCH2);
 		}
 		else if (vkCode == '8')
 		{
-			ProcessMachineKeyUp(&cpuState->inputPort2, (u8)Port2MachineKeys::TILT);
+			ProcessMachineKeyUp(&machine->inputPort2, (u8)Port2MachineKeys::TILT);
 		}
 		else if (vkCode == '9')
 		{
-			ProcessMachineKeyUp(&cpuState->inputPort2, (u8)Port2MachineKeys::DIPSWITCHBONUS);
+			ProcessMachineKeyUp(&machine->inputPort2, (u8)Port2MachineKeys::DIPSWITCHBONUS);
 		}
 		else if (vkCode == '0')
 		{
-			ProcessMachineKeyUp(&cpuState->inputPort2, (u8)Port2MachineKeys::DIPSWITCHCOIN);
+			ProcessMachineKeyUp(&machine->inputPort2, (u8)Port2MachineKeys::DIPSWITCHCOIN);
 		}
 	}
 }
@@ -360,39 +465,17 @@ s32 CALLBACK WinMain(HINSTANCE currInstance, HINSTANCE prevInstance, LPSTR cmdLi
 	globalRunning = true;
 	
 	CPUState cpuState = {};
-	cpuState.regF.unused1 = 0;
-	cpuState.regF.unused2 = 0;
-	cpuState.regF.unused3 = 0;
-	cpuState.programCounter = 0;
-	cpuState.enableInterrupt = false;
-	cpuState.shift0 = 0;
-	cpuState.shift1 = 0;
-	cpuState.shiftOffset = 0;
-	cpuState.inputPort1 = 0;
-	cpuState.inputPort2 = 0;
+	MachineState machine = {};
+	machine.romSize = 0x2000;
+	Win32_ResetEmulator(&cpuState, &machine);
 	cpuState.memory = (u8 *)VirtualAlloc(0, MEGABYTES(1), MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
-	
-	char *romFilename = "invaders.eer";
-	u16 romSize = 0x2000;
-	
-	HANDLE romHandle =  CreateFileA(romFilename, GENERIC_READ, FILE_SHARE_READ, 0, OPEN_EXISTING, 0, 0);
-	if (romHandle != INVALID_HANDLE_VALUE)
-	{
-		if (cpuState.memory)
-		{
-			DWORD bytesRead;
-			ReadFile(romHandle, cpuState.memory, romSize, &bytesRead, 0);
-		}
-		
-		CloseHandle(romHandle);
-	}
 	
 	WNDCLASSA windowClass = {};
 	
 	Win32_ResizeDIBSection(&globalBackBuffer, &cpuState, 224, 256);
 	
 	windowClass.style = CS_HREDRAW | CS_VREDRAW | CS_OWNDC;
-	windowClass.lpfnWndProc = WindowProc;
+	windowClass.lpfnWndProc = Win32_WindowProc;
 	windowClass.hInstance = currInstance;
 	windowClass.lpszClassName = "8080WindowClass";
 	
@@ -410,6 +493,40 @@ s32 CALLBACK WinMain(HINSTANCE currInstance, HINSTANCE prevInstance, LPSTR cmdLi
 		
 		if (window)
 		{
+			Win32_Menus menus = {};
+			// Menu Programming
+			// TODO(bSalmon): Check if a struct of Appended IDs can be used to pass to WindowProc
+			HMENU menuBar = CreateMenu();
+			
+			MENUINFO menuBarInfo = {};
+			menuBarInfo.cbSize = sizeof(MENUINFO);
+			menuBarInfo.fMask = MIM_APPLYTOSUBMENUS | MIM_STYLE;
+			menuBarInfo.dwStyle = MNS_NOTIFYBYPOS;
+			
+			SetMenuInfo(menuBar, &menuBarInfo);
+			
+			HMENU emulatorOptions = CreateMenu();
+			menus.emulatorOptions = emulatorOptions;
+			
+			HMENU settings = CreateMenu();
+			menus.settings = settings;
+			
+			AppendMenuA(menuBar, MF_POPUP, (UINT_PTR)emulatorOptions, "Emulator");
+			AppendMenuA(menuBar, MF_POPUP, (UINT_PTR)settings, "Settings");
+			
+			AppendMenuA(emulatorOptions, MF_STRING, 0, "Load ROM");
+			
+			MENUITEMINFOA enableColourItemInfo = {};
+			enableColourItemInfo.cbSize = sizeof(MENUITEMINFOA);
+			enableColourItemInfo.fMask = MIIM_CHECKMARKS | MIIM_FTYPE | MIIM_STATE | MIIM_STRING ;
+			enableColourItemInfo.fType = MFT_STRING;
+			enableColourItemInfo.fState = MFS_UNCHECKED;
+			enableColourItemInfo.dwTypeData = "Enable Colour";
+			
+			BOOL test = InsertMenuItemA(settings, 0, TRUE, &enableColourItemInfo);
+			
+			SetMenu(window, menuBar);
+			
 			HDC deviceContext = GetDC(window);
 			
 			unsigned char *castedMemContents = (unsigned char *)cpuState.memory;
@@ -430,14 +547,20 @@ s32 CALLBACK WinMain(HINSTANCE currInstance, HINSTANCE prevInstance, LPSTR cmdLi
 						case WM_SYSKEYDOWN:
 						case WM_KEYDOWN:
 						{
-							Win32_HandleKeyDown(&cpuState, message);
+							Win32_HandleKeyDown(&cpuState, &machine, message);
 							break;
 						}
 						
 						case WM_SYSKEYUP:
 						case WM_KEYUP:
 						{
-							Win32_HandleKeyUp(&cpuState, message);
+							Win32_HandleKeyUp(&cpuState, &machine, message);
+							break;
+						}
+						
+						case WM_MENUCOMMAND:
+						{
+							Win32_HandleMenuCommands(&cpuState, &machine, menus, window, message.wParam, message.lParam);
 							break;
 						}
 						
@@ -485,7 +608,7 @@ s32 CALLBACK WinMain(HINSTANCE currInstance, HINSTANCE prevInstance, LPSTR cmdLi
 						interruptNum = 1;
 					}
 					
-					RenderVideoMemContents(&backBuffer, &cpuState);
+					RenderVideoMemContents(&backBuffer, &cpuState, machine.enableColour);
 					
 					nextInterrupt = now + (0.5 * targetMSPerInterrupt);
 				}
@@ -507,7 +630,7 @@ s32 CALLBACK WinMain(HINSTANCE currInstance, HINSTANCE prevInstance, LPSTR cmdLi
 					PrintDisassembly(cpuPrint, &castedMemContents[cpuState.programCounter]);
 #endif
 					
-					Emulate(&cpuState, castedMemContents, &cycles);
+					Emulate(&cpuState, &machine, castedMemContents, &cycles);
 					
 #if EMU8080_INTERNAL
 					sprintf_s(cpuPrint, sizeof(cpuPrint), "\tCPU FLAGS:\nS=%d,Z=%d,A=%d,P=%d,C=%d\n", cpuState.regF.s, cpuState.regF.z, cpuState.regF.a, cpuState.regF.p, cpuState.regF.c);
