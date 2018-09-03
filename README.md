@@ -7,8 +7,6 @@ Made in 3 and a half weeks around a Space Invaders ROM as a Programming Exercise
 ## Current State
 Currently it is in a state that can be considered 'Complete', however further additions are planned:
 - Windows Menu support for:
-  - Load ROMs
-  - Enable/Disable Colour
   - Save/Load Game State
   
 - Unlikely but possible addition
